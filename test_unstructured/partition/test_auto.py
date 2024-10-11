@@ -749,22 +749,30 @@ def test_auto_partition_tsv_from_filename():
 # ================================================================================================
 # TXT
 # ================================================================================================
-
-
-def test_auto_partition_text_from_filename():
-    file_path = example_doc_path("fake-text.txt")
+@pytest.mark.parametrize(
+    ("filename", "expected_elements"),
+    [
+        (
+            "fake-text.txt",
+            [
+                NarrativeText(text="This is a test document to use for unit tests."),
+                Address(text="Doylestown, PA 18901"),
+                Title(text="Important points:"),
+                ListItem(text="Hamburgers are delicious"),
+                ListItem(text="Dogs are the best"),
+                ListItem(text="I love fuzzy blankets"),
+            ],
+        ),
+        ("fake-text-all-whitespace.txt", []),
+    ],
+)
+def test_auto_partition_text_from_filename(filename: str, expected_elements: list[Element]):
+    file_path = example_doc_path(filename)
 
     elements = partition(filename=file_path, strategy=PartitionStrategy.HI_RES)
 
-    assert elements == [
-        NarrativeText(text="This is a test document to use for unit tests."),
-        Address(text="Doylestown, PA 18901"),
-        Title(text="Important points:"),
-        ListItem(text="Hamburgers are delicious"),
-        ListItem(text="Dogs are the best"),
-        ListItem(text="I love fuzzy blankets"),
-    ]
-    assert all(e.metadata.filename == "fake-text.txt" for e in elements)
+    assert elements == expected_elements
+    assert all(e.metadata.filename == filename for e in elements)
     assert all(e.metadata.file_directory == example_doc_path("") for e in elements)
 
 
@@ -1199,35 +1207,39 @@ def test_auto_partition_overwrites_any_filetype_applied_by_file_specific_partiti
 
 
 @pytest.mark.parametrize(
-    "file_type",
+    ("file_name", "file_type"),
     [
-        t
-        for t in FileType
-        if t
-        not in (
-            FileType.EMPTY,
-            FileType.JSON,
-            FileType.UNK,
-            FileType.WAV,
-            FileType.XLS,
-            FileType.ZIP,
-        )
-        and t.partitioner_shortname != "image"
+        ("stanley-cups.csv", FileType.CSV),
+        ("simple.doc", FileType.DOC),
+        ("simple.docx", FileType.DOCX),
+        ("fake-email.eml", FileType.EML),
+        ("simple.epub", FileType.EPUB),
+        ("fake-html.html", FileType.HTML),
+        ("README.md", FileType.MD),
+        ("fake-email.msg", FileType.MSG),
+        ("simple.odt", FileType.ODT),
+        ("pdf/DA-1p.pdf", FileType.PDF),
+        ("fake-power-point.ppt", FileType.PPT),
+        ("simple.pptx", FileType.PPTX),
+        ("README.rst", FileType.RST),
+        ("fake-doc.rtf", FileType.RTF),
+        ("stanley-cups.tsv", FileType.TSV),
+        ("fake-text.txt", FileType.TXT),
+        ("tests-example.xls", FileType.XLSX),
+        ("stanley-cups.xlsx", FileType.XLSX),
+        ("factbook.xml", FileType.XML),
     ],
 )
-def test_auto_partition_applies_the_correct_filetype_for_all_filetypes(file_type: FileType):
+def test_auto_partition_applies_the_correct_filetype_for_all_filetypes(
+    file_name: str, file_type: FileType
+):
+    file_path = example_doc_path(file_name)
     partition_fn_name = file_type.partitioner_function_name
     module = import_module(file_type.partitioner_module_qname)
     partition_fn = getattr(module, partition_fn_name)
 
-    # -- partition the first example-doc with the extension for this filetype --
-    elements: list[Element] = []
-    doc_path = example_doc_path("pdf") if file_type == FileType.PDF else example_doc_path("")
-    extensions = file_type._extensions
-    for file in pathlib.Path(doc_path).iterdir():
-        if file.is_file() and file.suffix in extensions:
-            elements = partition_fn(str(file))
-            break
+    # -- partition the example-doc for this filetype --
+    elements = partition_fn(file_path)
 
     assert elements
     assert all(
